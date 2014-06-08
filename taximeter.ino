@@ -10,13 +10,18 @@
 
 #include <LiquidCrystal.h>
 #include <EEPROM.h>
+#include <Wire.h>
+#include <Time.h>
+#include <DS1307RTC.h>
 
 //variables
 LiquidCrystal lcd(9, 8, 7, 6, 5, 4);
 short pulseCounter;
 unsigned short meters;
 unsigned int vehicleSpeed;
-float kilometers;
+float totalKm;
+float hireTotalKm;
+long income;
 float hireDistance;
 unsigned int fixedFare;
 unsigned int fare;
@@ -24,6 +29,8 @@ int dailyRun;
 long time1;
 long time2;
 bool working;
+tmElements_t tm;
+
 
 bool commandSent;
 bool onHire;
@@ -50,7 +57,6 @@ void setup() {
   
   pulseCounter = 0;
   meters = 0;
-  kilometers = 0;
   hireDistance = 0;
   fixedFare = 50;
   fare = fixedFare;
@@ -83,20 +89,24 @@ void loop() {
     //Serial.println(meters);
   }
   
-  if(meters >= 10){
+  if(meters >= 1){
     meters = 0;
-    kilometers += 0.1;
-    if(onHire)
+    totalKm += 0.1;
+    if(onHire){
       hireDistance += 0.1;
-    if(hireDistance > 1)
+      hireTotalKm+=0.1;
+    }
+    if(hireDistance > 1){
       fare += 4;
+      income+=4;
+    }
   }
   
   lcd.setCursor(0, 0);
   
   if(onHire){
     lcd.print(hireDistance);
-    lcd.print("km ");
+    lcd.print("hireTotalKm ");
   
     lcd.print(fare);
     lcd.print("LKR     ");
@@ -106,7 +116,7 @@ void loop() {
   lcd.setCursor(0, 1);
   
   lcd.print(vehicleSpeed);
-  lcd.print("km/h    ");
+  lcd.print("hireTotalKm/h    ");
   
   if(!onHire){
     if (digitalRead(OPTION) == LOW)
@@ -168,6 +178,7 @@ void startButton(){
     hireDistance = 0;
     fare = fixedFare;
     onHire = true;
+    income += 50;
 }
 
 void endButton(){
@@ -176,6 +187,8 @@ void endButton(){
     if(onHire){
       Serial.println("Hire ended");
       onHire = false;
+      saveData(1,hireTotalKm);
+      saveData(3,income);
     }
   }
   else{
@@ -199,7 +212,7 @@ void reportButton(){
 void serviceButton(){
   delay(50);
   if(!isLongPress(SERVICE)){
-    Serial.println("Total kilometers");
+    Serial.println("Total totalKm");
     showTotDist();
   }
   else{
@@ -212,11 +225,11 @@ void serviceButton(){
 void showDailyRpt(){
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print(readData(4));
+  lcd.print(income-readLong(4));
   lcd.print(" LKR");
   lcd.setCursor(0, 1);
-  lcd.print(readData(8));
-  lcd.print(" km");
+  lcd.print(hireTotalKm-readFloat(5));
+  lcd.print(" hireTotalKm");
   while(digitalRead(OPTION) == HIGH);
   delay(600);
   lcd.clear();
@@ -225,11 +238,11 @@ void showDailyRpt(){
 void showMonthlyRpt(){
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print(readData(12));
+  lcd.print(income-readLong(6));
   lcd.print(" LKR");
   lcd.setCursor(0, 1);
-  lcd.print(readData(16));
-  lcd.print(" km");
+  lcd.print(hireTotalKm-readFloat(7));
+  lcd.print(" hireTotalKm");
   while(digitalRead(OPTION) == HIGH);
   delay(600);
   lcd.clear();
@@ -240,15 +253,15 @@ void showTotDist(){
   lcd.setCursor(0, 0);
   lcd.print("Total distance");
   lcd.setCursor(0, 1);
-  lcd.print(readData(0));
-  lcd.print(" km");
+  lcd.print(totalKm);
+  lcd.print(" hireTotalKm"); 
   while(digitalRead(OPTION) == HIGH);
   delay(600);
   lcd.clear();
 }
 
 void clearDistance(){
-  //saveData(0, 0);
+  saveData(2,totalKm);
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Reset Suceeded!");
@@ -265,16 +278,34 @@ void startup(){
   delay(5000);
   lcd.clear();
   working = true;
-  if(readData(0) >= 30000){
+  totalKm=readFloat(0);
+  hireTotalKm = readFloat(1);
+  income = readLong(3);
+  if(totalKm-readFloat(2)>30000){
     digitalWrite(SERVICE_REM, HIGH);
   }
+  if (RTC.read(tm)) {
+    if(tm.Day!=readLong(8)+1){
+      saveData(4,income);
+      saveData(5,hireTotalKm);
+      saveData(8,(long)tm.Day);
+    }
+    else if(tm.Month!=readLong(9)){
+      saveData(6,income);
+      saveData(7,hireTotalKm);
+      saveData(9,(long)tm.Month);
+    }
+  }
+  
 }
 
 void shutDown(){
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Shutting down....");
-  //saveData();
+  saveData(0,totalKm);
+  saveData(1,hireTotalKm);
+  saveData(3,income);
   delay(5000);
   digitalWrite(LCDPOWER, LOW);
   lcd.clear();
@@ -284,26 +315,37 @@ void shutDown(){
 void setRTC(){
   
 }
-
 /*
  addr 0 : Total distance
- addr 4 : Daily income
- addr 8 : Daily distance
- addr 12 : Monthly income
- addr 16 : Monthly distance
+ addr 1 : Total hire distance
+ addr 2 : Last service kilometer
+ addr 3 : Total income
+ addr 4 : Day start income
+ addr 5 : Day start distance
+ addr 6 : Month start income
+ addr 7 : Month start distance
+ addr 8 : Day
+ addr 9 : Month
 */
+
+void saveData(int addr, float data){
+  saveData(addr,data*10);
+}
+
 void saveData(int addr, long data){
   for(int i=addr*4;i<addr*4+4;i++){
     EEPROM.write(i, data & 0xFF);
-    data >> 8;
+    data=data >> 8;
   }
 }
 
-long readData(int addr){
+long readLong(int addr){
   long result=0;
-  for(int i=addr*4;i<addr*4+4;i++){
-    result << 8;
-    result+=EEPROM.read(i);
+  for(int i=addr*4+3;i>=addr*4;i--){
+    result=(result << 8)+EEPROM.read(i);
   }
   return result;
+}
+float readFloat(int addr){
+  return readLong(addr)/10.0;
 }
