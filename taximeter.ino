@@ -106,7 +106,7 @@ void loop() {
   
   if(onHire){
     lcd.print(hireDistance);
-    lcd.print("hireTotalKm ");
+    lcd.print("km ");
   
     lcd.print(fare);
     lcd.print("LKR     ");
@@ -116,7 +116,7 @@ void loop() {
   lcd.setCursor(0, 1);
   
   lcd.print(vehicleSpeed);
-  lcd.print("hireTotalKm/h    ");
+  lcd.print("km/h     ");
   
   if(!onHire){
     if (digitalRead(OPTION) == LOW)
