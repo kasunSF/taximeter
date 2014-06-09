@@ -31,6 +31,7 @@ long time2;
 bool working;
 int waitingTime;
 long waitingClock;
+long showReportDelay;
 tmElements_t tm;
 
 
@@ -69,6 +70,7 @@ void setup() {
   time1 = millis();
   working = false;
   waitingTime = 0;
+  showReportDelay = 0;
 }
 
 //Main functionn
@@ -108,8 +110,15 @@ void loop() {
       hireTotalKm+=0.1;
     }
     if(hireDistance > 1){
-      fare += 4;
-      income+=4;
+      RTC.read(tm);
+      if(tm.Hour > 21 && tm.Hour < 7){
+        fare += 5;
+        income += 5;
+      }
+      else{
+        fare += 4;
+        income += 4;
+      }
     }
   }
   
@@ -216,6 +225,11 @@ void endButton(){
   }
   else{
     Serial.println("Shutdown initiated");
+    if(onHire){
+      onHire = false;
+      saveData(1,hireTotalKm);
+      saveData(3,income);
+    }
     shutDown();
   }
 }
@@ -246,6 +260,7 @@ void serviceButton(){
 }
 
 void showDailyRpt(){
+  showReportDelay = millis();
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print(income-readLong(4));
@@ -253,12 +268,13 @@ void showDailyRpt(){
   lcd.setCursor(0, 1);
   lcd.print(hireTotalKm-readFloat(5));
   lcd.print(" km");
-  while(digitalRead(OPTION) == HIGH);
+  while(digitalRead(OPTION) == HIGH && millis() - showReportDelay < 5000);
   delay(600);
   lcd.clear();
 }
 
 void showMonthlyRpt(){
+  showReportDelay = millis();
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print(income-readLong(6));
@@ -266,19 +282,20 @@ void showMonthlyRpt(){
   lcd.setCursor(0, 1);
   lcd.print(hireTotalKm-readFloat(7));
   lcd.print(" km");
-  while(digitalRead(OPTION) == HIGH);
+  while(digitalRead(OPTION) == HIGH && millis() - showReportDelay < 5000);
   delay(600);
   lcd.clear();
 }
 
 void showTotDist(){
+  showReportDelay = millis();
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Total distance");
   lcd.setCursor(0, 1);
   lcd.print(totalKm);
-  lcd.print(" km"); 
-  while(digitalRead(OPTION) == HIGH);
+  lcd.print(" km");
+  while(digitalRead(OPTION) == HIGH && millis() - showReportDelay < 5000);
   delay(600);
   lcd.clear();
 }
@@ -288,7 +305,7 @@ void clearDistance(){
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Reset Suceeded!");
-  delay(4000);
+  delay(2000);
   lcd.clear();
 }
 
@@ -298,7 +315,7 @@ void startup(){
   lcd.print("    HyprLINK");
   lcd.setCursor(0, 1);
   lcd.print("   Taxi Meter");
-  delay(5000);
+  delay(3000);
   lcd.clear();
   working = true;
   totalKm=readFloat(0);
@@ -309,18 +326,16 @@ void startup(){
   }
   
   if (RTC.read(tm)) {
-    if(tm.Day!=readLong(8)+1){
+    if(tm.Day!=readLong(8)){
       saveData(4,income);
       saveData(5,hireTotalKm);
       saveData(8,(long)tm.Day);
     }
     else if(tm.Month!=readLong(9)){
-      Serial.println("Reading else if");
       saveData(6,income);
       saveData(7,hireTotalKm);
       saveData(9,(long)tm.Month);
     }
-    Serial.println("Came out");
   }
   
 }
@@ -332,7 +347,7 @@ void shutDown(){
   saveData(0,totalKm);
   saveData(1,hireTotalKm);
   saveData(3,income);
-  delay(5000);
+  delay(3000);
   digitalWrite(LCDPOWER, LOW);
   lcd.clear();
   working = false;
@@ -376,7 +391,7 @@ float readFloat(int addr){
 void showTime(){
   tmElements_t tm;
   int refresh;
-  long delayTime = millis();
+  long showReportDelay = millis();
   lcd.clear();
   if (RTC.read(tm)) {
     lcd.setCursor(0, 1);
@@ -386,7 +401,7 @@ void showTime(){
     lcd.print("/");
     lcd.print(tmYearToCalendar(tm.Year));
     
-    while(digitalRead(OPTION) == HIGH && millis() - delayTime < 5000){
+    while(digitalRead(OPTION) == HIGH && millis() - showReportDelay < 5000){
       lcd.setCursor(0, 0);
       RTC.read(tm);
       if (tm.Hour >= 0 && tm.Hour < 10)
@@ -409,7 +424,7 @@ void showTime(){
       lcd.setCursor(0, 0);
       lcd.print("Clock error!");
       lcd.setCursor(0, 1);
-      lcd.print("Service your meter");
-      while(digitalRead(OPTION) == HIGH);
+      lcd.print("Service meter");
+      while(digitalRead(OPTION) == HIGH && millis() - showReportDelay < 5000);
   }
 }
