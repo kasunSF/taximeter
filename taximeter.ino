@@ -29,11 +29,14 @@ int dailyRun;
 long time1;
 long time2;
 bool working;
+int waitingTime;
+long waitingClock;
 tmElements_t tm;
 
 
 bool commandSent;
 bool onHire;
+bool waiting;
 int inputWait;
 int longPress;
 
@@ -62,8 +65,10 @@ void setup() {
   fare = fixedFare;
   vehicleSpeed = 0;
   onHire = false;
+  waiting = false;
   time1 = millis();
   working = false;
+  waitingTime = 0;
 }
 
 //Main functionn
@@ -84,12 +89,18 @@ void loop() {
   time2 = millis()-time1;
   if(time2 >= 1000){
     vehicleSpeed = pulseCounter*3600/time2;
+    if(vehicleSpeed == 0){
+      waiting = true;
+      waitingClock = millis();
+    }
+    else
+      waiting = false;
+      
     time1 = millis();
     pulseCounter = 0;    
-    //Serial.println(meters);
   }
   
-  if(meters >= 1){
+  if(meters >= 100){
     meters = 0;
     totalKm += 0.1;
     if(onHire){
@@ -109,14 +120,22 @@ void loop() {
     lcd.print("km ");
   
     lcd.print(fare);
-    lcd.print("LKR     ");
+    lcd.print("LKR      ");
   
   }
   
   lcd.setCursor(0, 1);
-  
-  lcd.print(vehicleSpeed);
-  lcd.print("km/h     ");
+  if(onHire && waiting){
+    if(millis() - waitingClock >= 30000){
+      fare += 5;
+      waitingClock = millis();
+    }
+    lcd.print("Waiting...");
+  }
+  else{
+    lcd.print(vehicleSpeed);
+    lcd.print("km/h        ");
+  }
   
   if(!onHire){
     if (digitalRead(OPTION) == LOW)
@@ -145,18 +164,22 @@ void readCommand(){
   
   while(!commandSent){
     if(digitalRead(START) == LOW){
-      Serial.println("Set RTC");
-      while(digitalRead(START) == LOW);
-      setRTC();
+      Serial.println("Show time");
+      delay(50);
+      //while(digitalRead(START) == LOW);
+      showTime();
       commandSent = true;
     }
-    Serial.println(inputWait);
-    --inputWait;
+    if(!commandSent){
+      Serial.println(inputWait);
+      --inputWait;
+    }
     
     if(inputWait <= 0){
       Serial.println("No Input Detected");
       commandSent = true;
     }
+    lcd.clear();
   }
 }
 
@@ -212,7 +235,7 @@ void reportButton(){
 void serviceButton(){
   delay(50);
   if(!isLongPress(SERVICE)){
-    Serial.println("Total totalKm");
+    Serial.println("Total distance");
     showTotDist();
   }
   else{
@@ -229,7 +252,7 @@ void showDailyRpt(){
   lcd.print(" LKR");
   lcd.setCursor(0, 1);
   lcd.print(hireTotalKm-readFloat(5));
-  lcd.print(" hireTotalKm");
+  lcd.print(" km");
   while(digitalRead(OPTION) == HIGH);
   delay(600);
   lcd.clear();
@@ -242,7 +265,7 @@ void showMonthlyRpt(){
   lcd.print(" LKR");
   lcd.setCursor(0, 1);
   lcd.print(hireTotalKm-readFloat(7));
-  lcd.print(" hireTotalKm");
+  lcd.print(" km");
   while(digitalRead(OPTION) == HIGH);
   delay(600);
   lcd.clear();
@@ -254,7 +277,7 @@ void showTotDist(){
   lcd.print("Total distance");
   lcd.setCursor(0, 1);
   lcd.print(totalKm);
-  lcd.print(" hireTotalKm"); 
+  lcd.print(" km"); 
   while(digitalRead(OPTION) == HIGH);
   delay(600);
   lcd.clear();
@@ -284,6 +307,7 @@ void startup(){
   if(totalKm-readFloat(2)>30000){
     digitalWrite(SERVICE_REM, HIGH);
   }
+  
   if (RTC.read(tm)) {
     if(tm.Day!=readLong(8)+1){
       saveData(4,income);
@@ -291,10 +315,12 @@ void startup(){
       saveData(8,(long)tm.Day);
     }
     else if(tm.Month!=readLong(9)){
+      Serial.println("Reading else if");
       saveData(6,income);
       saveData(7,hireTotalKm);
       saveData(9,(long)tm.Month);
     }
+    Serial.println("Came out");
   }
   
 }
@@ -312,9 +338,6 @@ void shutDown(){
   working = false;
 }
 
-void setRTC(){
-  
-}
 /*
  addr 0 : Total distance
  addr 1 : Total hire distance
@@ -329,7 +352,7 @@ void setRTC(){
 */
 
 void saveData(int addr, float data){
-  saveData(addr,data*10);
+  saveData(addr,(long)data*10);
 }
 
 void saveData(int addr, long data){
@@ -348,4 +371,45 @@ long readLong(int addr){
 }
 float readFloat(int addr){
   return readLong(addr)/10.0;
+}
+
+void showTime(){
+  tmElements_t tm;
+  int refresh;
+  long delayTime = millis();
+  lcd.clear();
+  if (RTC.read(tm)) {
+    lcd.setCursor(0, 1);
+    lcd.print(tm.Day);
+    lcd.print("/");
+    lcd.print(tm.Month);
+    lcd.print("/");
+    lcd.print(tmYearToCalendar(tm.Year));
+    
+    while(digitalRead(OPTION) == HIGH && millis() - delayTime < 5000){
+      lcd.setCursor(0, 0);
+      RTC.read(tm);
+      if (tm.Hour >= 0 && tm.Hour < 10)
+        lcd.print("0");
+      lcd.print(tm.Hour);
+      lcd.print(":");
+      
+      if (tm.Minute >= 0 && tm.Minute < 10)
+        lcd.print("0");
+      lcd.print(tm.Minute);
+      lcd.print(":");
+      
+      if (tm.Second >= 0 && tm.Second < 10)
+        lcd.print("0");
+      lcd.print(tm.Second); 
+    }
+    delay(200);
+  }
+  else {
+      lcd.setCursor(0, 0);
+      lcd.print("Clock error!");
+      lcd.setCursor(0, 1);
+      lcd.print("Service your meter");
+      while(digitalRead(OPTION) == HIGH);
+  }
 }
