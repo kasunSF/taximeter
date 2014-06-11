@@ -83,6 +83,7 @@ void loop() {
       if(isLongPress(START)){
         Serial.println("Starting taxi meter");
         startup();
+        lcd.clear();
       }
       else
         digitalWrite(LCDPOWER, LOW);
@@ -322,7 +323,7 @@ void startup(){
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("    WELCOME!");
-  lcd.clear();
+  delay(1000);
   working = true;
   totalKm=readFloat(0);
   hireTotalKm = readFloat(1);
@@ -353,7 +354,7 @@ void shutDown(){
   saveData(0,totalKm);
   saveData(1,hireTotalKm);
   saveData(3,income);
-  delay(3000);
+  delay(2000);
   digitalWrite(LCDPOWER, LOW);
   lcd.clear();
   working = false;
