@@ -1,9 +1,10 @@
 //pinouts
 #define OPTION A0
-#define START 10
-#define END 11
-#define REPORT 12
-#define SERVICE 13
+#define START 13
+#define END 12
+#define REPORT 11
+#define SERVICE 10
+
 #define HALL 2
 #define LCDPOWER A1
 #define SERVICE_REM A2
@@ -170,12 +171,14 @@ void readCommand(){
   commandSent = false;
   Serial.println("Waiting for command....");
   inputWait = 500;
-  
+  lcd.setCursor(0, 0);
+  lcd.print("Press service");
+  lcd.setCursor(0, 1);
+  lcd.print("for time/date");
   while(!commandSent){
-    if(digitalRead(START) == LOW){
+    if(digitalRead(SERVICE) == LOW){
       Serial.println("Show time");
       delay(50);
-      //while(digitalRead(START) == LOW);
       showTime();
       commandSent = true;
     }
@@ -188,8 +191,8 @@ void readCommand(){
       Serial.println("No Input Detected");
       commandSent = true;
     }
-    lcd.clear();
   }
+  lcd.clear();
 }
 
 bool isLongPress(int pin){
@@ -315,7 +318,10 @@ void startup(){
   lcd.print("    HyprLINK");
   lcd.setCursor(0, 1);
   lcd.print("   Taxi Meter");
-  delay(3000);
+  delay(2000);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("    WELCOME!");
   lcd.clear();
   working = true;
   totalKm=readFloat(0);
